@@ -214,6 +214,11 @@ async def update_list_lowongan_5mins():
     # Logger
     logger.info("--- Performing 5-mins interval scheduled update...")
 
+    channel = bot.get_channel(CHANNEL)
+    if not channel:
+        logger.error(f"--- Channel with ID {CHANNEL} not found.")
+        return
+
     global data
     if not scraper:
         logger.error("--- Scraper is not initialized. Cannot perform scheduled update.")
@@ -270,14 +275,7 @@ async def update_list_lowongan_5mins():
     write_json(data)
 
     # Logger
-    logger.info("5-mins interval scheduled update completed.")
-
-    channel = bot.get_channel(CHANNEL)
-    if channel:
-        logger.info("--- Scheduled vacancy update sent successfully.")
-    else:
-        logger.error(f"--- Channel with ID {CHANNEL} not found.")
-
+    logger.info("--- Interval scheduled update completed.")
 
 @update_list_lowongan_5mins.before_loop
 async def before_update_lowongan_5mins():
