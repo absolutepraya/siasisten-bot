@@ -1,246 +1,334 @@
 import discord
 import os
 import json
+import datetime as dt
+import logging
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from scraper_requests import ScraperRequests
-import datetime as d
-import logging
+from zoneinfo import ZoneInfo
+from typing import List, Dict
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Load environment variables
 load_dotenv()
 
 # Environment Variables
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD = os.getenv("DISCORD_GUILD")
-CHANNEL = int(os.getenv("DISCORD_CHANNEL"))
+GUILD_ID = int(os.getenv("DISCORD_GUILD_ID"))  # Use Guild ID instead of name
+CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL"))
 NLINE = "\n"
-FMT = "%Y-%m-%d %H:%M:%S.%f"
+FMT = "%Y-%m-%d %H:%M:%S.%f%z"
 
-# Discord Intents
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True  # If enabled in Developer Portal
+# Timezone
+JAKARTA_TZ = ZoneInfo("Asia/Jakarta")
 
-# Initialize Bot
-bot = commands.Bot(command_prefix="-", intents=intents)
 
-# Initialize Scraper
-try:
-    scraper = ScraperRequests()
-except Exception as e:
-    logger.exception(
-        "Failed to initialize the scraper. The bot will run without scraping functionality."
-    )
-    scraper = None
+def get_suffix(day: int) -> str:
+    """
+    Returns the ordinal suffix for a given day.
+    """
+    if 11 <= day <= 13:
+        return "th"
+    elif day % 10 == 1:
+        return "st"
+    elif day % 10 == 2:
+        return "nd"
+    elif day % 10 == 3:
+        return "rd"
+    else:
+        return "th"
 
-# Data Storage
-data = tuple()
-if os.path.exists("data.json"):
-    with open("data.json", "r") as f:
-        temp = json.load(f)
+
+def get_formatted_time() -> str:
+    """
+    Returns the current time formatted with timezone and ordinal suffix.
+    """
+    now = dt.datetime.now(JAKARTA_TZ)
+    suffix = get_suffix(now.day)
+    return now.strftime(f"%b {now.day}{suffix}, %Y — %H:%M")
+
+
+class VacancyBot(commands.Cog):
+    """
+    A Cog for handling vacancy-related commands and background tasks.
+    """
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.scraper = None
+        self.data = ()
+        self.load_data()
+        self.initialize_scraper()
+
+    def load_data(self):
+        """
+        Loads vacancy data from a JSON file.
+        """
+        if os.path.exists("data.json"):
+            try:
+                with open("data.json", "r") as f:
+                    temp = json.load(f)
+                time_str = temp["time"]
+                parsed_time = dt.datetime.strptime(time_str, FMT).astimezone(JAKARTA_TZ)
+                self.data = (parsed_time, temp["data"])
+                logger.info("Loaded existing data from data.json.")
+            except Exception as e:
+                logger.exception(f"Error parsing data.json: {e}")
+                self.data = ()
+        else:
+            logger.info("No existing data.json found. Starting fresh.")
+            self.data = ()
+
+    def write_json(self, data: tuple):
+        """
+        Writes vacancy data to a JSON file.
+        """
         try:
-            data = (d.datetime.strptime(temp["time"], FMT), temp["data"])
-            logger.info("Loaded existing data from data.json.")
+            with open("data.json", "w") as f:
+                time_str = data[0].strftime(FMT)
+                json.dump({"time": time_str, "data": data[1]}, f, indent=4)
+            logger.info("Updated data.json with new data.")
         except Exception as e:
-            logger.exception(f"Error parsing data.json: {e}")
-            data = tuple()
+            logger.exception(f"Failed to write data.json: {e}")
 
+    def initialize_scraper(self):
+        """
+        Initializes the scraper.
+        """
+        try:
+            self.scraper = ScraperRequests()
+            logger.info("Scraper initialized successfully.")
+        except Exception as e:
+            logger.exception("Failed to initialize the scraper!")
+            self.scraper = None
 
-def write_json(data):
-    with open("data.json", "w") as f:
-        json.dump({"time": data[0].strftime(FMT), "data": data[1]}, f, indent=4)
-    logger.info("Updated data.json with new data.")
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """
+        Event handler for when the bot is ready.
+        """
+        guild = self.bot.get_guild(GUILD_ID)
+        if guild:
+            logger.info(
+                f"{self.bot.user} is connected to the following guild:\n{guild.name} (id: {guild.id})"
+            )
+        else:
+            logger.error(
+                f"Guild with ID '{GUILD_ID}' not found. Please check the DISCORD_GUILD_ID environment variable."
+            )
+            return
 
+        if self.scraper:
+            logger.info("Starting background task for vacancy updates.")
+            self.vacancies_update_5mins.start()
+        else:
+            logger.error("Scraper is not initialized. Background task will not start.")
 
-@bot.event
-async def on_ready():
-    global data
-    logger.info(f"{bot.user} has connected to Discord!")
-    for guild in bot.guilds:
-        if guild.name == GUILD:
-            break
-    else:
-        logger.error(
-            f"Guild '{GUILD}' not found. Please check the DISCORD_GUILD environment variable."
-        )
-        return
-    logger.info(
-        f"{bot.user} is connected to the following guild:\n"
-        f"{guild.name} (id: {guild.id})"
-    )
-    if scraper:
-        update_list_lowongan_1hr.start()
-    else:
-        logger.error("Scraper is not initialized. Background task will not start.")
+    @commands.command(name="display", aliases=["d"])
+    async def display_list_lowongan(self, ctx: commands.Context):
+        """
+        Displays the current list of vacancies.
+        """
+        formatted_time = get_formatted_time()
+        if not self.data:
+            response = discord.Embed(
+                title="There's no vacancies data.",
+                description="Update the data using command `-update`.",
+            )
+        else:
+            list_lowongan = self.data[1]
+            description = "List of open TA vacancies:\n\n" + "\n\n".join(
+                [
+                    f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
+                    for entry in list_lowongan
+                ]
+            )
+            response = discord.Embed(
+                title=f"TA Vacancies (as of {formatted_time})",
+                description=description,
+            )
+        await ctx.send(embed=response)
 
+    @commands.command(name="update", aliases=["u"])
+    async def update_list_lowongan(self, ctx: commands.Context):
+        """
+        Manually updates the list of vacancies.
+        """
+        formatted_time = get_formatted_time()
+        if not self.scraper:
+            await ctx.send("Scraper is not initialized. Unable to update vacancies.")
+            return
 
-@bot.command(name="display")
-async def display_list_lowongan(context):
-    global data
-    if not data:
+        new_data = self.scraper.get_lowongan()
+        now = dt.datetime.now(JAKARTA_TZ)
+
+        if not new_data:
+            await ctx.send("Failed to retrieve vacancy data.")
+            return
+
+        if not self.data or set(entry["title"] for entry in new_data) != set(
+            entry["title"] for entry in self.data[1]
+        ):
+            if self.data:
+                existing_titles = set(entry["title"] for entry in self.data[1])
+                new_entries = [
+                    entry for entry in new_data if entry["title"] not in existing_titles
+                ]
+            else:
+                new_entries = new_data
+
+            if new_entries:
+                description = "\n\n".join(
+                    [
+                        f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
+                        for entry in new_entries
+                    ]
+                )
+                response = discord.Embed(
+                    title=f"New vacancies found! (as of {formatted_time})",
+                    description=description,
+                )
+            else:
+                response = discord.Embed(
+                    title=f"Update (as of {formatted_time})",
+                    description="No new vacancies found.",
+                )
+        else:
+            response = discord.Embed(
+                title=f"Update (as of {formatted_time})",
+                description="No new vacancies found.",
+            )
+        self.data = (now, new_data)
+        self.write_json(self.data)
+        await ctx.send(embed=response)
+
+    @commands.command(name="help", aliases=["h"])
+    async def get_help(self, ctx: commands.Context):
+        """
+        Displays help information.
+        """
         response = discord.Embed(
-            title="There's no lowongan data.",
-            description="Update the data using command `-update`.",
+            title="Bot Usage",
+            description=(
+                "Prefix: `-`\n\n"
+                "Available commands:\n"
+                "• `-display` or `-d`: Display the list of TA vacancies.\n"
+                "• `-update` or `-u`: Update the list of TA vacancies.\n"
+                "• `-clear` or `-c`: Clear the data stored in the bot.\n"
+                "• `-help` or `-h`: Display this help message."
+            ),
         )
-    else:
-        now = data[0]
-        list_lowongan = data[1]
-        description = "List lowongan asdos yang buka:\n\n" + "\n\n".join(
-            [
-                f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
-                for entry in list_lowongan
-            ]
-        )
-        response = discord.Embed(
-            title=f"Info Loker (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-            description=description,
-        )
-    await context.send(embed=response)
+        await ctx.send(embed=response)
 
+    @commands.command(name="clear", aliases=["c"])
+    async def clear_data(self, ctx: commands.Context):
+        """
+        Clears the stored vacancy data.
+        """
+        self.data = ()
+        try:
+            if os.path.exists("data.json"):
+                os.remove("data.json")
+                logger.info("Cleared data.json.")
+        except Exception as e:
+            logger.exception(f"Failed to clear data.json: {e}")
+        response = discord.Embed(title="Data cleared!")
+        await ctx.send(embed=response)
 
-@bot.command(name="update")
-async def update_list_lowongan(context):
-    global data
-    if not scraper:
-        await context.send("Scraper is not initialized. Unable to update lowongan.")
-        return
-
-    new_data = scraper.get_lowongan()
-    now = d.datetime.now()
-
-    if not new_data:
-        await context.send("Failed to retrieve lowongan data.")
-        return
-
-    if not data or set([entry["title"] for entry in new_data]) != set(
-        [entry["title"] for entry in data[1]]
+    async def send_vacancy_update(
+        self, new_entries: List[Dict[str, str]], formatted_time: str
     ):
-        if data:
-            existing_titles = set([entry["title"] for entry in data[1]])
+        """
+        Sends a formatted embed message to the designated channel with new vacancies.
+        """
+        if not new_entries:
+            response = discord.Embed(
+                title=f"Update (as of {formatted_time})",
+                description="No new vacancies found.",
+            )
+        else:
+            description = "\n\n".join(
+                [
+                    f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
+                    for entry in new_entries
+                ]
+            )
+            response = discord.Embed(
+                title=f"New vacancies found! (as of {formatted_time})",
+                description=description,
+            )
+        channel = self.bot.get_channel(CHANNEL_ID)
+        if channel:
+            await channel.send(embed=response)
+            logger.info("Sent vacancy update successfully.")
+        else:
+            logger.error(f"Channel with ID {CHANNEL_ID} not found.")
+
+    async def perform_update(self):
+        """
+        Performs the update logic used by both the command and the background task.
+        """
+        if not self.scraper:
+            logger.error("Scraper is not initialized. Cannot perform update.")
+            return
+
+        new_data = self.scraper.get_lowongan()
+        now = dt.datetime.now(JAKARTA_TZ)
+        formatted_time = get_formatted_time()
+
+        if not new_data:
+            logger.warning("Failed to retrieve vacancy data.")
+            return
+
+        if not self.data:
+            new_entries = new_data
+        else:
+            existing_titles = set(entry["title"] for entry in self.data[1])
             new_entries = [
                 entry for entry in new_data if entry["title"] not in existing_titles
             ]
-        else:
-            new_entries = new_data
 
         if new_entries:
-            description = "\n\n".join(
-                [
-                    f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
-                    for entry in new_entries
-                ]
-            )
-            response = discord.Embed(
-                title=f"Lowongan baru unlocked! (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-                description=description,
-            )
+            self.data = (now, new_data)
+            self.write_json(self.data)
+            await self.send_vacancy_update(new_entries, formatted_time)
         else:
-            response = discord.Embed(
-                title=f"Update (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-                description="Belum ada lowongan baru.",
-            )
-    else:
-        response = discord.Embed(
-            title=f"Update (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-            description="Belum ada lowongan baru.",
-        )
-    data = (now, new_data)
-    write_json(data)
-    await context.send(embed=response)
+            logger.info("No new vacancies found during update.")
+
+        logger.info("Update task completed.")
+
+    @tasks.loop(minutes=5)
+    async def vacancies_update_5mins(self):
+        """
+        Background task that checks for new vacancies every 30 minutes.
+        """
+        try:
+            logger.info("Running scheduled vacancy update task.")
+            await self.perform_update()
+        except Exception as e:
+            logger.exception(f"An error occurred during scheduled update: {e}")
+
+    @vacancies_update_5mins.before_loop
+    async def before_vacancies_update_5mins(self):
+        await self.bot.wait_until_ready()
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error):
+        """
+        Handles errors for commands.
+        """
+        logger.error(f"Error in command '{ctx.command}': {error}")
+        await ctx.send("An error occurred while processing the command.")
 
 
-@bot.command(name="h")
-async def get_help(context):
-    response = discord.Embed(
-        title="Bot Usage",
-        description=(
-            "Prefix: `-`\n\n"
-            "Available commands:\n"
-            "**h** : Lists all available commands\n"
-            "**display** : Displays the current lowongan list (might be outdated)\n"
-            "**update** : Updates the lowongan list, displays the difference\n"
-            "**clear** : Clears stored lowongan data\n"
-        ),
-    )
-    await context.send(embed=response)
+# Initialize the bot and add the Cog
+bot = commands.Bot(command_prefix="-", intents=intents)
 
+bot.add_cog(VacancyBot(bot))
 
-@bot.command(name="clear")
-async def clear_data(context):
-    global data
-    data = tuple()
-    if os.path.exists("data.json"):
-        os.remove("data.json")
-        logger.info("Cleared data.json.")
-    response = discord.Embed(title="Data cleared!")
-    await context.send(embed=response)
-
-
-@tasks.loop(minutes=30)
-async def update_list_lowongan_1hr():
-    global data
-    if not scraper:
-        logger.error("Scraper is not initialized. Cannot perform scheduled update.")
-        return
-
-    new_data = scraper.get_lowongan()
-    now = d.datetime.now()
-
-    if not new_data:
-        logger.warning("Failed to retrieve lowongan data during scheduled update.")
-        return
-
-    if not data:
-        description = "\n\n".join(
-            [
-                f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
-                for entry in new_data
-            ]
-        )
-        response = discord.Embed(
-            title=f"Info Loker (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-            description=description,
-        )
-    else:
-        existing_titles = set([entry["title"] for entry in data[1]])
-        new_entries = [
-            entry for entry in new_data if entry["title"] not in existing_titles
-        ]
-
-        if new_entries:
-            description = "\n\n".join(
-                [
-                    f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
-                    for entry in new_entries
-                ]
-            )
-            response = discord.Embed(
-                title=f"Lowongan baru unlocked! (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-                description=description,
-            )
-        else:
-            response = discord.Embed(
-                title=f"Update (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-                description="Belum ada lowongan baru.",
-            )
-
-    data = (now, new_data)
-    write_json(data)
-    channel = bot.get_channel(CHANNEL)
-    if channel:
-        await channel.send(embed=response)
-        logger.info("Scheduled lowongan update sent successfully.")
-    else:
-        logger.error(f"Channel with ID {CHANNEL} not found.")
-
-
-@update_list_lowongan_1hr.before_loop
-async def before_update_lowongan_1hr():
-    await bot.wait_until_ready()
-
-
+# Run the bot
 bot.run(TOKEN)
