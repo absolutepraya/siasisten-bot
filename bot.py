@@ -212,6 +212,9 @@ async def clear_data(context):
 
 @tasks.loop(minutes=5)
 async def update_list_lowongan_5mins():
+    # Logger
+    logger.info("Performing 5-mins interval scheduled update...")
+
     global data
     if not scraper:
         logger.error("Scraper is not initialized. Cannot perform scheduled update.")
@@ -260,6 +263,10 @@ async def update_list_lowongan_5mins():
 
     data = (now, new_data)
     write_json(data)
+
+    # Logger
+    logger.info("5-mins interval scheduled update completed.")
+
     channel = bot.get_channel(CHANNEL)
     if channel:
         await channel.send(embed=response)
