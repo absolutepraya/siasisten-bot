@@ -45,7 +45,7 @@ load_dotenv()
 
 # Environment Variables
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD = os.getenv("DISCORD_GUILD")
+GUILD_ID = int(os.getenv("DISCORD_GUILD"))
 CHANNEL = int(os.getenv("DISCORD_CHANNEL"))
 NLINE = "\n"
 FMT = "%Y-%m-%d %H:%M:%S.%f"
@@ -90,19 +90,18 @@ def write_json(data):
 async def on_ready():
     global data
     logger.info(f"{bot.user} has connected to Discord!")
-    for guild in bot.guilds:
-        if guild.name == GUILD:
-            break
-    else:
+    guild = bot.get_guild(GUILD_ID)
+    if guild is None:
         logger.error(
-            f"Guild '{GUILD}' not found. Please check the DISCORD_GUILD environment variable."
+            f"Guild with ID '{GUILD_ID}' not found. Please check the DISCORD_GUILD_ID environment variable."
         )
         return
     logger.info(
         f"{bot.user} is connected to the following guild:\n"
-        f"{guild.name} (id: {guild.id})"
+        f"{guild.name} (ID: {guild.id})"
     )
     if scraper:
+        logger.info("Starting background task update_list_lowongan_5mins.")
         update_list_lowongan_5mins.start()
     else:
         logger.error("Scraper is not initialized. Background task will not start.")
