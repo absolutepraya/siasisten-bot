@@ -183,7 +183,7 @@ async def update_list_lowongan(context):
     await context.send(embed=response)
 
 
-@bot.command(name="h", aliases=["help"])
+@bot.command(name="h")
 async def get_help(context):
     response = discord.Embed(
         title="Bot Usage",
@@ -193,7 +193,7 @@ async def get_help(context):
             "• `-display` or `-d`: Display the list of TA vacancies.\n"
             "• `-update` or `-u`: Update the list of TA vacancies.\n"
             "• `-clear` or `-c`: Clear the data stored in the bot.\n"
-            "• `-help` or `-h`: Display this help message."
+            "• `-h`: Display this help message."
         ),
     )
     await context.send(embed=response)
