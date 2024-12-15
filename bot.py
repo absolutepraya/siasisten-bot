@@ -183,7 +183,7 @@ async def update_list_lowongan(context):
     await context.send(embed=response)
 
 
-@bot.command(name="help", aliases=["h"])
+@bot.command(name="h", aliases=["help"])
 async def get_help(context):
     response = discord.Embed(
         title="Bot Usage",
