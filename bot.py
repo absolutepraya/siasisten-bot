@@ -212,7 +212,7 @@ async def clear_data(context):
 @tasks.loop(minutes=5)
 async def update_list_lowongan_5mins():
     # Logger
-    logger.info("Performing 5-mins interval scheduled update...")
+    logger.info("-----\nPerforming 5-mins interval scheduled update...")
 
     global data
     if not scraper:
@@ -254,11 +254,13 @@ async def update_list_lowongan_5mins():
                 title=f"List of open TA vacancies (as of {get_formatted_time()})",
                 description=description,
             )
+            await channel.send(embed=response)
+
+            # Logger
+            logger.info(f"New vacancies found during scheduled update: {new_entries}")
         else:
-            response = discord.Embed(
-                title=f"Update (as of {get_formatted_time()})",
-                description="No new vacancies found.",
-            )
+            # Logger
+            logger.info("No new vacancies found during scheduled update.")
 
     data = (now, new_data)
     write_json(data)
@@ -268,8 +270,7 @@ async def update_list_lowongan_5mins():
 
     channel = bot.get_channel(CHANNEL)
     if channel:
-        await channel.send(embed=response)
-        logger.info("Scheduled vacancy update sent successfully.")
+        logger.info("Scheduled vacancy update sent successfully.\n-----")
     else:
         logger.error(f"Channel with ID {CHANNEL} not found.")
 
