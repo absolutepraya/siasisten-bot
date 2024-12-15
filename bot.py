@@ -1,11 +1,41 @@
 import discord
 import os
 import json
+import datetime as d
+import logging
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from scraper_requests import ScraperRequests
-import datetime as d
-import logging
+from zoneinfo import ZoneInfo
+
+# Timezone
+JAKARTA_TZ = ZoneInfo("Asia/Jakarta")
+
+
+def get_suffix(day: int) -> str:
+    """
+    Returns the ordinal suffix for a given day.
+    """
+    if 11 <= day <= 13:
+        return "th"
+    elif day % 10 == 1:
+        return "st"
+    elif day % 10 == 2:
+        return "nd"
+    elif day % 10 == 3:
+        return "rd"
+    else:
+        return "th"
+
+
+def get_formatted_time() -> str:
+    """
+    Returns the current time formatted with timezone and ordinal suffix.
+    """
+    now = d.datetime.now(JAKARTA_TZ)
+    suffix = get_suffix(now.day)
+    return now.strftime(f"%b {now.day}{suffix}, %Y — %H:%M")
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +53,7 @@ FMT = "%Y-%m-%d %H:%M:%S.%f"
 # Discord Intents
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # If enabled in Developer Portal
+intents.members = True
 
 # Initialize Bot
 bot = commands.Bot(command_prefix="-", intents=intents)
@@ -73,47 +103,47 @@ async def on_ready():
         f"{guild.name} (id: {guild.id})"
     )
     if scraper:
-        update_list_lowongan_1hr.start()
+        update_list_lowongan_5mins.start()
     else:
         logger.error("Scraper is not initialized. Background task will not start.")
 
 
-@bot.command(name="display")
+@bot.command(name="display", aliases=["d"])
 async def display_list_lowongan(context):
     global data
     if not data:
         response = discord.Embed(
-            title="There's no lowongan data.",
+            title="There's no vacancy data.",
             description="Update the data using command `-update`.",
         )
     else:
         now = data[0]
         list_lowongan = data[1]
-        description = "List lowongan asdos yang buka:\n\n" + "\n\n".join(
+        description = "List of open TA vacancies:\n\n" + "\n\n".join(
             [
                 f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
                 for entry in list_lowongan
             ]
         )
         response = discord.Embed(
-            title=f"Info Loker (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
+            title=f"Info Loker (as of {get_formatted_time()})",
             description=description,
         )
     await context.send(embed=response)
 
 
-@bot.command(name="update")
+@bot.command(name="update", aliases=["u"])
 async def update_list_lowongan(context):
     global data
     if not scraper:
-        await context.send("Scraper is not initialized. Unable to update lowongan.")
+        await context.send("Scraper is not initialized. Unable to update vacancy.")
         return
 
     new_data = scraper.get_lowongan()
     now = d.datetime.now()
 
     if not new_data:
-        await context.send("Failed to retrieve lowongan data.")
+        await context.send("Failed to retrieve vacancy data.")
         return
 
     if not data or set([entry["title"] for entry in new_data]) != set(
@@ -135,41 +165,41 @@ async def update_list_lowongan(context):
                 ]
             )
             response = discord.Embed(
-                title=f"Lowongan baru unlocked! (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
+                title=f"New vacancies found! (as of {get_formatted_time()})",
                 description=description,
             )
         else:
             response = discord.Embed(
-                title=f"Update (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-                description="Belum ada lowongan baru.",
+                title=f"Update (as of {get_formatted_time()})",
+                description="No new vacancies found.",
             )
     else:
         response = discord.Embed(
-            title=f"Update (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-            description="Belum ada lowongan baru.",
+            title=f"Update (as of {get_formatted_time()})",
+            description="No new vacancies found.",
         )
     data = (now, new_data)
     write_json(data)
     await context.send(embed=response)
 
 
-@bot.command(name="h")
+@bot.command(name="help", aliases=["h"])
 async def get_help(context):
     response = discord.Embed(
         title="Bot Usage",
         description=(
             "Prefix: `-`\n\n"
             "Available commands:\n"
-            "**h** : Lists all available commands\n"
-            "**display** : Displays the current lowongan list (might be outdated)\n"
-            "**update** : Updates the lowongan list, displays the difference\n"
-            "**clear** : Clears stored lowongan data\n"
+            "• `-display` or `-d`: Display the list of TA vacancies.\n"
+            "• `-update` or `-u`: Update the list of TA vacancies.\n"
+            "• `-clear` or `-c`: Clear the data stored in the bot.\n"
+            "• `-help` or `-h`: Display this help message."
         ),
     )
     await context.send(embed=response)
 
 
-@bot.command(name="clear")
+@bot.command(name="clear", aliases=["c"])
 async def clear_data(context):
     global data
     data = tuple()
@@ -180,8 +210,8 @@ async def clear_data(context):
     await context.send(embed=response)
 
 
-@tasks.loop(minutes=30)
-async def update_list_lowongan_1hr():
+@tasks.loop(minutes=5)
+async def update_list_lowongan_5mins():
     global data
     if not scraper:
         logger.error("Scraper is not initialized. Cannot perform scheduled update.")
@@ -191,7 +221,7 @@ async def update_list_lowongan_1hr():
     now = d.datetime.now()
 
     if not new_data:
-        logger.warning("Failed to retrieve lowongan data during scheduled update.")
+        logger.warning("Failed to retrieve vacancy data during scheduled update.")
         return
 
     if not data:
@@ -202,7 +232,7 @@ async def update_list_lowongan_1hr():
             ]
         )
         response = discord.Embed(
-            title=f"Info Loker (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
+            title=f"Info Loker (as of {get_formatted_time()})",
             description=description,
         )
     else:
@@ -219,13 +249,13 @@ async def update_list_lowongan_1hr():
                 ]
             )
             response = discord.Embed(
-                title=f"Lowongan baru unlocked! (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
+                title=f"List of open TA vacancies (as of {get_formatted_time()})",
                 description=description,
             )
         else:
             response = discord.Embed(
-                title=f"Update (as of {now.strftime('%Y-%m-%d %H:%M:%S')})",
-                description="Belum ada lowongan baru.",
+                title=f"Update (as of {get_formatted_time()})",
+                description="No new vacancies found.",
             )
 
     data = (now, new_data)
@@ -233,13 +263,13 @@ async def update_list_lowongan_1hr():
     channel = bot.get_channel(CHANNEL)
     if channel:
         await channel.send(embed=response)
-        logger.info("Scheduled lowongan update sent successfully.")
+        logger.info("Scheduled vacancy update sent successfully.")
     else:
         logger.error(f"Channel with ID {CHANNEL} not found.")
 
 
-@update_list_lowongan_1hr.before_loop
-async def before_update_lowongan_1hr():
+@update_list_lowongan_5mins.before_loop
+async def before_update_lowongan_5mins():
     await bot.wait_until_ready()
 
 
