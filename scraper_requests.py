@@ -10,17 +10,16 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+
 class ScraperRequests:
     def __init__(self):
         self.client = r.Session()
         if not self.login():
-            logger.error("Failed to log in. Exiting scraper.")
+            logger.error("Failed to log in. Scraper will not function.")
             raise Exception("Login failed.")
 
     def login(self):
         login_url = "https://siasisten.cs.ui.ac.id/login/"
-        list_lowongan_url = "https://siasisten.cs.ui.ac.id/lowongan/listLowongan/"
-
         try:
             # Fetch the login page to get CSRF token
             response = self.client.get(login_url)
@@ -43,20 +42,22 @@ class ScraperRequests:
                 "username": username,
                 "password": password,
                 "csrfmiddlewaretoken": csrftoken,
-                "next": ""
+                "next": "",
             }
 
             headers = {
                 "Referer": login_url,
-                "User-Agent": "Mozilla/5.0 (compatible; SiAsistenBot/1.0)"
+                "User-Agent": "Mozilla/5.0 (compatible; SiAsistenBot/1.0)",
             }
 
             # Perform login
-            login_response = self.client.post(login_url, data=login_payload, headers=headers)
+            login_response = self.client.post(
+                login_url, data=login_payload, headers=headers
+            )
             login_response.raise_for_status()
             logger.info("Login POST request successful.")
 
-            # Verify login by checking the current URL or specific content
+            # Verify login by checking if redirected away from login page
             if login_response.url == login_url:
                 logger.error("Login failed. Check your credentials.")
                 return False
@@ -70,11 +71,10 @@ class ScraperRequests:
 
     def get_lowongan(self):
         list_lowongan_url = "https://siasisten.cs.ui.ac.id/lowongan/listLowongan/"
+        base_url = "https://siasisten.cs.ui.ac.id"
 
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (compatible; SiAsistenBot/1.0)"
-            }
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; SiAsistenBot/1.0)"}
             response = self.client.get(list_lowongan_url, headers=headers)
             response.raise_for_status()
             logger.info("Fetched lowongan list page successfully.")
@@ -83,31 +83,44 @@ class ScraperRequests:
             tables = soup.find_all("table")
 
             if not tables:
-                logger.error("No <table> elements found on the page. Possible reasons:")
-                logger.error("- Login might have failed.")
-                logger.error("- The page structure has changed.")
-                logger.error("- Access is restricted or requires additional authentication.")
+                logger.error("No <table> elements found on the page.")
                 return []
 
-            newest = tables[0]
-            rows = newest.find_all("tr")
+            # Assuming the first table contains the lowongan list
+            table = tables[0]
+            rows = table.find_all("tr")
 
             if len(rows) <= 1:
                 logger.warning("No data rows found in the table.")
                 return []
 
-            texts = []
+            lowongan_list = []
 
             for row in rows[1:]:
                 cols = row.find_all("td")
-                if len(cols) < 2:
+                if len(cols) < 9:
                     logger.warning("Skipping a row due to insufficient columns.")
                     continue
-                text = cols[1].get_text(separator="\n").strip()
-                texts.append(text)
 
-            logger.info(f"Extracted {len(texts)} lowongan entries.")
-            return texts
+                # Extract job title
+                title_cell = cols[1]
+                # Use separator="\n" to handle <br> tags
+                title = title_cell.get_text(separator="\n").strip()
+
+                # Extract 'Daftar' link
+                daftar_cell = cols[8]
+                daftar_link_tag = daftar_cell.find("a", href=True)
+                if daftar_link_tag:
+                    daftar_link = base_url + daftar_link_tag["href"]
+                else:
+                    daftar_link = "Link not available"
+
+                lowongan_entry = {"title": title, "daftar_link": daftar_link}
+
+                lowongan_list.append(lowongan_entry)
+
+            logger.info(f"Extracted {len(lowongan_list)} lowongan entries.")
+            return lowongan_list
 
         except Exception as e:
             logger.exception(f"An error occurred while fetching lowongan: {e}")
