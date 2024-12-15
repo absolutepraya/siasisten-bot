@@ -18,7 +18,7 @@ load_dotenv()
 
 # Environment Variables
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = int(os.getenv("DISCORD_GUILD_ID"))  # Use Guild ID instead of name
+GUILD_ID = int(os.getenv("DISCORD_GUILD"))
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL"))
 NLINE = "\n"
 FMT = "%Y-%m-%d %H:%M:%S.%f%z"
