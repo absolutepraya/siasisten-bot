@@ -126,7 +126,7 @@ async def display_list_lowongan(context):
             ]
         )
         response = discord.Embed(
-            title=f"Info Loker (as of {get_formatted_time()})",
+            title=f"TA Vacancy Info (as of {get_formatted_time()})",
             description=description,
         )
     await context.send(embed=response)
@@ -235,7 +235,7 @@ async def update_list_lowongan_5mins():
             ]
         )
         response = discord.Embed(
-            title=f"Info Loker (as of {get_formatted_time()})",
+            title=f"TA Vacancy Info (as of {get_formatted_time()})",
             description=description,
         )
     else:
