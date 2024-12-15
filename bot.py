@@ -212,18 +212,18 @@ async def clear_data(context):
 @tasks.loop(minutes=5)
 async def update_list_lowongan_5mins():
     # Logger
-    logger.info("-----\nPerforming 5-mins interval scheduled update...")
+    logger.info("--- Performing 5-mins interval scheduled update...")
 
     global data
     if not scraper:
-        logger.error("Scraper is not initialized. Cannot perform scheduled update.")
+        logger.error("--- Scraper is not initialized. Cannot perform scheduled update.")
         return
 
     new_data = scraper.get_lowongan()
     now = d.datetime.now()
 
     if not new_data:
-        logger.warning("Failed to retrieve vacancy data during scheduled update.")
+        logger.warning("--- Failed to retrieve vacancy data during scheduled update.")
         return
 
     if not data:
@@ -237,6 +237,10 @@ async def update_list_lowongan_5mins():
             title=f"TA Vacancy Info (as of {get_formatted_time()})",
             description=description,
         )
+        await channel.send(embed=response)
+
+        # Logger
+        logger.info("Initial data update completed.")
     else:
         existing_titles = set([entry["title"] for entry in data[1]])
         new_entries = [
@@ -270,9 +274,9 @@ async def update_list_lowongan_5mins():
 
     channel = bot.get_channel(CHANNEL)
     if channel:
-        logger.info("Scheduled vacancy update sent successfully.\n-----")
+        logger.info("--- Scheduled vacancy update sent successfully.")
     else:
-        logger.error(f"Channel with ID {CHANNEL} not found.")
+        logger.error(f"--- Channel with ID {CHANNEL} not found.")
 
 
 @update_list_lowongan_5mins.before_loop
