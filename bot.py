@@ -116,11 +116,10 @@ async def display_list_lowongan(context):
             description="Update the data using command `-update`.",
         )
     else:
-        now = data[0]
         list_lowongan = data[1]
         description = "List of open TA vacancies:\n\n" + "\n\n".join(
             [
-                f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
+                f"• **{entry['title']}**\n{entry['jumlah_pelamar_diterima']}/{entry['jumlah_lowongan']} slots filled - {entry['jumlah_pelamar']} applicants\n[Daftar]({entry['daftar_link']})"
                 for entry in list_lowongan
             ]
         )
@@ -276,6 +275,7 @@ async def update_list_lowongan_5mins():
 
     # Logger
     logger.info("--- Interval scheduled update completed.")
+
 
 @update_list_lowongan_5mins.before_loop
 async def before_update_lowongan_5mins():

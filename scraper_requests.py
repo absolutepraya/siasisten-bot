@@ -74,7 +74,7 @@ class ScraperRequests:
         base_url = "https://siasisten.cs.ui.ac.id"
 
         try:
-            headers = {"User-Agent": "Mozilla/5.0 (compatible; SiAsistenBot/1.0)"}
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; SIASISTENLogger/1.0)"}
             response = self.client.get(list_lowongan_url, headers=headers)
             response.raise_for_status()
             logger.info("Fetched lowongan list page successfully.")
@@ -114,8 +114,23 @@ class ScraperRequests:
                     daftar_link = base_url + daftar_link_tag["href"]
                 else:
                     daftar_link = "Link not available"
+                
+                # Extract 'Jumlah Lowongan', 'Jumlah Pelamar', 'Jumlah Pelamat Diterima'
+                jumlah_lowongan = cols[4].get_text()
+                jumlah_pelamar = cols[5].get_text()
+                jumlah_pelamar_diterima = cols[6].get_text()
 
-                lowongan_entry = {"title": title, "daftar_link": daftar_link}
+                # Extract 'Status'
+                status = cols[3].get_text()
+
+                lowongan_entry = {
+                    "title": title, 
+                    "daftar_link": daftar_link,
+                    "jumlah_lowongan": jumlah_lowongan,
+                    "jumlah_pelamar": jumlah_pelamar,
+                    "jumlah_pelamar_diterima": jumlah_pelamar_diterima,
+                    "status": status
+                }
 
                 lowongan_list.append(lowongan_entry)
 
