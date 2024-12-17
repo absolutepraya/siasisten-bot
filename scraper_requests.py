@@ -116,9 +116,9 @@ class ScraperRequests:
                     daftar_link = "Link not available"
                 
                 # Extract 'Jumlah Lowongan', 'Jumlah Pelamar', 'Jumlah Pelamat Diterima'
-                jumlah_lowongan = cols[4].get_text()
-                jumlah_pelamar = cols[5].get_text()
-                jumlah_pelamar_diterima = cols[6].get_text()
+                jumlah_lowongan = cols[4].get_text().strip().replace("asisten", "")
+                jumlah_pelamar = cols[5].get_text().strip().replace("mahasiswa", "")
+                jumlah_pelamar_diterima = cols[6].get_text().strip().replace("mahasiswa", "")
 
                 # Extract 'Status'
                 status = cols[3].get_text()
