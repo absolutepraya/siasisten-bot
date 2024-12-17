@@ -114,22 +114,28 @@ class ScraperRequests:
                     daftar_link = base_url + daftar_link_tag["href"]
                 else:
                     daftar_link = "Link not available"
-                
+
                 # Extract 'Jumlah Lowongan', 'Jumlah Pelamar', 'Jumlah Pelamat Diterima'
-                jumlah_lowongan = cols[4].get_text().strip().replace("asisten", "")
-                jumlah_pelamar = cols[5].get_text().strip().replace("mahasiswa", "")
-                jumlah_pelamar_diterima = cols[6].get_text().strip().replace("mahasiswa", "")
+                jumlah_lowongan = (
+                    cols[4].get_text().strip().replace("asisten", "").replace(" ", "")
+                )
+                jumlah_pelamar = (
+                    cols[5].get_text().strip().replace("mahasiswa", "").replace(" ", "")
+                )
+                jumlah_pelamar_diterima = (
+                    cols[6].get_text().strip().replace("mahasiswa", "").replace(" ", "")
+                )
 
                 # Extract 'Status'
                 status = cols[3].get_text()
 
                 lowongan_entry = {
-                    "title": title, 
+                    "title": title,
                     "daftar_link": daftar_link,
                     "jumlah_lowongan": jumlah_lowongan,
                     "jumlah_pelamar": jumlah_pelamar,
                     "jumlah_pelamar_diterima": jumlah_pelamar_diterima,
-                    "status": status
+                    "status": status,
                 }
 
                 lowongan_list.append(lowongan_entry)

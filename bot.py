@@ -117,14 +117,14 @@ async def display_list_lowongan(context):
         )
     else:
         list_lowongan = data[1]
-        description = "List of open TA vacancies:\n\n" + "\n\n".join(
+        description = "**List of open TA vacancies:**\n\n" + "\n\n".join(
             [
                 f"• **{entry['title']}**\n{entry['jumlah_pelamar_diterima']}/{entry['jumlah_lowongan']} slots filled - {entry['jumlah_pelamar']} applicants\n[Daftar]({entry['daftar_link']})"
                 for entry in list_lowongan
             ]
         )
         response = discord.Embed(
-            title=f"TA Vacancy Info (as of {get_formatted_time()})",
+            title=f"ℹ️ TA Vacancy Info (as of {get_formatted_time()})",
             description=description,
         )
     await context.send(embed=response)
@@ -184,7 +184,7 @@ async def update_list_lowongan(context):
 @bot.command(name="h")
 async def get_help(context):
     response = discord.Embed(
-        title="Bot Usage",
+        title="📜 Bot Usage",
         description=(
             "Prefix: `-`\n\n"
             "Available commands:\n"
@@ -204,7 +204,7 @@ async def clear_data(context):
     if os.path.exists("data.json"):
         os.remove("data.json")
         logger.info("Cleared data.json.")
-    response = discord.Embed(title="Data cleared!")
+    response = discord.Embed(title="🚮 Data cleared!")
     await context.send(embed=response)
 
 
@@ -233,12 +233,12 @@ async def update_list_lowongan_5mins():
     if not data:
         description = "\n\n".join(
             [
-                f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
+                f"• **{entry['title']}**\n{entry['jumlah_pelamar_diterima']}/{entry['jumlah_lowongan']} slots filled - {entry['jumlah_pelamar']} applicants\n[Daftar]({entry['daftar_link']})"
                 for entry in new_data
             ]
         )
         response = discord.Embed(
-            title=f"TA Vacancy Info (as of {get_formatted_time()})",
+            title=f"ℹ️ TA Vacancy Info (as of {get_formatted_time()})",
             description=description,
         )
         await channel.send(embed=response)
@@ -254,12 +254,12 @@ async def update_list_lowongan_5mins():
         if new_entries:
             description = "\n\n".join(
                 [
-                    f"• **{entry['title']}**\n[Daftar]({entry['daftar_link']})"
+                    f"• **{entry['title']}**\n{entry['jumlah_pelamar_diterima']}/{entry['jumlah_lowongan']} slots filled - {entry['jumlah_pelamar']} applicants\n[Daftar]({entry['daftar_link']})"
                     for entry in new_entries
                 ]
             )
             response = discord.Embed(
-                title=f"List of open TA vacancies (as of {get_formatted_time()})",
+                title=f"🆕 List of open TA vacancies (as of {get_formatted_time()})",
                 description=description,
             )
             await channel.send(embed=response)
